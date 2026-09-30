@@ -1,0 +1,70 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isTeacher() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/staff/$(request.auth.uid))
+        && get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role in ['teacher', 'admin'];
+    }
+
+    match /staff/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isTeacher());
+      allow write: if false;
+    }
+
+    // Teacher-managed root collections.
+    match /students/{studentCode} {
+      // QR-only parent access: the QR code is the access credential.
+      allow get: if true;
+      allow list, create, update, delete: if isTeacher();
+    }
+
+    match /students/{studentCode}/{subpath=**} {
+      // The parent portal reads only the subcollections of the student code supplied by the QR.
+      // Keep real sensitive data limited because QR-only access behaves like a bearer credential.
+      allow read: if true;
+      allow write: if isTeacher();
+    }
+
+    match /students/{studentCode}/{subcollection}/{docId} {
+      allow read: if true;
+      allow write: if isTeacher();
+    }
+
+    match /attendance/{id} {
+      allow read, write: if isTeacher();
+    }
+
+    match /marks/{id} {
+      allow read, write: if isTeacher();
+    }
+
+    match /homework/{id} {
+      allow read, write: if isTeacher();
+    }
+
+    match /notices/{id} {
+      allow read, write: if isTeacher();
+    }
+
+    match /timetable/{id} {
+      allow read, write: if isTeacher();
+    }
+
+    match /notifications/{id} {
+      allow read, write: if isTeacher();
+    }
+
+    // Web push tokens are written by the parent browser after notification permission.
+    match /parentTokens/{tokenId} {
+      allow create, update: if true;
+      allow read, delete: if isTeacher();
+    }
+  }
+}
